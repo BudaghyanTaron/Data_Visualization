@@ -1,0 +1,144 @@
+---
+title: "Homework 1"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+date: "2025-02-06"
+---
+```{r setup, include=FALSE, message = FALSE, warning = FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+## Part 1
+### 1.1
+load libraries
+```{r}
+library(dplyr)  
+library(lubridate) 
+```
+- load dataset
+- print first 5 rows
+```{r}
+crime_data <- read.csv("crime_data.csv", stringsAsFactors = FALSE)
+
+head(crime_data, 5)
+```
+### 1.2
+- get number of missing values for columns
+- delete columns which miss more than 50% of data
+```{r}
+missing_values <- colSums(is.na(crime_data))
+
+missing_values[missing_values > 0]
+
+threshold <- 0.5 * nrow(crime_data)
+columns_to_drop <- names(missing_values[missing_values > threshold])
+
+crime_data_cleaned <- crime_data %>% select(-one_of(columns_to_drop))
+
+names(crime_data_cleaned)
+
+```
+### 1.3
+- Convert Date.OCC to date format
+- Extract Year, Month, Day to new columns
+- Calculate Hour from TIME.OCC
+```{r}
+crime_data_cleaned$DATE.OCC <- mdy_hms(crime_data_cleaned$DATE.OCC)
+
+crime_data_cleaned$Year <- year(crime_data_cleaned$DATE.OCC)
+crime_data_cleaned$Month <- month(crime_data_cleaned$DATE.OCC)
+crime_data_cleaned$Day <- day(crime_data_cleaned$DATE.OCC)
+
+crime_data_cleaned$Hour <- as.integer(crime_data_cleaned$TIME.OCC / 100)
+
+head(crime_data_cleaned[, c("DATE.OCC", "TIME.OCC", "Year", "Month", "Day", "Hour")])
+
+```
+### 1.4
+- Filter for 2023
+- Filter for burglaries
+- check if size changed
+```{r}
+crime_data_2023 <- crime_data_cleaned %>% filter(Year == 2023)
+
+crime_burglary_2023 <- crime_data_2023 %>% 
+  filter(grepl("BURGLARY", crime_data_2023$Crm.Cd.Desc, ignore.case = TRUE))
+
+cat("unfiltered data:", dim(crime_data_cleaned))
+cat("data for 2023:", dim(crime_data_2023))
+cat("data for burglary + 2023:", dim(crime_burglary_2023))
+```
+### 1.5
+- Group by AREA.NAME
+- Calculate total crimes and avg victim age
+- Display results
+```{r}
+crime_summary <- crime_burglary_2023 %>%
+  group_by(AREA.NAME) %>%
+  summarise(
+    Total_Crimes = n(),
+    Avg_Victim_Age = mean(Vict.Age, na.rm = TRUE)
+  ) %>%
+  arrange(desc(Total_Crimes))
+
+print(crime_summary, n = Inf)
+```
+## Part 3
+### 3.1
+- Group by Month
+- summaries total crimes for each month
+- Display results
+```{r}
+crimes_by_month <- crime_data_cleaned %>%
+  group_by(Month) %>%
+  summarise(Total_Crimes = n())
+
+print(crimes_by_month)
+```
+### 3.2
+- Filter crimes where weapon was not used
+- Get number of such crimes
+- Display results
+
+<em> NOTE: Using original crime_data because crime_data_cleaned does not have the Weapon.Used.Cd column </em>
+```{r}
+crimes_with_weapon <- crime_data %>%
+  filter(!is.na(Weapon.Used.Cd)) %>%  
+  summarise(Weapon_Crimes = n())      
+
+print(crimes_with_weapon)
+```
+### 3.3
+- Group by premis.desc
+- Get number of crimes for each premis.desc
+- Display results
+```{r}
+crime_by_premis_desc <- crime_data_cleaned %>%
+  group_by(Premis.Desc) %>%          
+  summarise(Total_Crimes = n())       
+
+print(crime_by_premis_desc)
+```
+## Part 4
+- Add a severity.score column which will be based on the rows data
+- Group by area and get sum of severity scores for each area
+- Display results
+
+<em> NOTE: Using original crime_data because crime_data_cleaned does not have the Weapon.Used.Cd column </em>
+```{r}
+crime_data <- crime_data %>%
+  mutate(
+    Severity.Score = case_when(
+      !is.na(Weapon.Used.Cd) ~ 5,  
+      grepl("BURGLARY", Crm.Cd.Desc, ignore.case = TRUE) ~ 3, 
+      TRUE ~ 1  
+    )
+  )
+
+severity_by_area <- crime_data %>%
+  group_by(AREA.NAME) %>%
+  summarise(Total_Severity_Score = sum(Severity.Score))
+
+print(severity_by_area)
+```
